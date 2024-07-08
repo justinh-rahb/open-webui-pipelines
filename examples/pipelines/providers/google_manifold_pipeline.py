@@ -80,9 +80,10 @@ class Pipeline:
                 self.pipelines = [
                     {
                         "id": "error",
-                        "name": f"Could not fetch models from Google: {str(e)}",
+                        "name": f"Could not fetch models from Google. Error: {str(e)}",
                     }
                 ]
+                print(f"Error fetching models: {str(e)}")
 
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
@@ -105,17 +106,12 @@ class Pipeline:
             generation_config = GenerationConfig(
                 temperature=body.get("temperature", 0.7),
                 top_p=body.get("top_p", 0.9),
-                top_k=body.get("top_k", 40),
                 max_output_tokens=body.get("max_tokens", 8192),
-                stop_sequences=body.get("stop", []),
             )
-
-            safety_settings = body.get("safety_settings")
 
             response = model.generate_content(
                 contents,
                 generation_config=generation_config,
-                safety_settings=safety_settings,
                 stream=body.get("stream", False),
             )
 
