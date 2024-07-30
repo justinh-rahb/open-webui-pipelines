@@ -26,11 +26,9 @@ boto3
 redis
 sqlmodel
 chromadb
-psycopg2-binary
 
 # Observability
 langfuse
-ddtrace
 
 # ML libraries
 torch
@@ -45,7 +43,6 @@ sentence-transformers
 transformers
 tokenizers
 nltk
-tiktoken
 
 # Image processing
 Pillow
@@ -57,7 +54,3 @@ seaborn
 
 # Web scraping
 beautifulsoup4
-
-# Llama Index for RAG
-llama-index
-llama-index-llms-ollama
