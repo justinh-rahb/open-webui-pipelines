@@ -56,8 +56,6 @@ matplotlib
 seaborn
 
 # Web scraping
-selenium
-playwright
 beautifulsoup4
 
 # Llama Index for RAG
