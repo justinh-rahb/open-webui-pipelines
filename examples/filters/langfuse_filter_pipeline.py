@@ -23,7 +23,6 @@ def get_last_assistant_message_obj(messages: List[dict]) -> dict:
             return message
     return {}
 
-
 class Pipeline:
     class Valves(BaseModel):
         pipelines: List[str] = []
@@ -44,7 +43,7 @@ class Pipeline:
             }
         )
         self.langfuse = None
-        self.chat_generations = {}
+        self.chat_traces = {}  # Changed from chat_generations to chat_traces
 
     async def on_startup(self):
         print(f"on_startup:{__name__}")
@@ -100,14 +99,8 @@ class Pipeline:
             session_id=body["chat_id"],
         )
 
-        generation = trace.generation(
-            name=body["chat_id"],
-            model=body["model"],
-            input=body["messages"],
-            metadata={"interface": "open-webui"},
-        )
-
-        self.chat_generations[body["chat_id"]] = generation
+        # Store the trace for later use
+        self.chat_traces[body["chat_id"]] = trace
         print(trace.get_trace_url())
 
         return body
@@ -115,16 +108,18 @@ class Pipeline:
     async def outlet(self, body: dict, user: Optional[dict] = None) -> dict:
         print(f"outlet:{__name__}")
         print(f"Received body: {body}")
-        if body["chat_id"] not in self.chat_generations:
+        if body["chat_id"] not in self.chat_traces:
             return body
 
-        generation = self.chat_generations[body["chat_id"]]
+        trace = self.chat_traces[body["chat_id"]]
+
+        assistant_message_obj = get_last_assistant_message_obj(body["messages"])
+        message_id = assistant_message_obj.get("id")
+
         assistant_message = get_last_assistant_message(body["messages"])
 
-        
         # Extract usage information for models that support it
         usage = None
-        assistant_message_obj = get_last_assistant_message_obj(body["messages"])
         if assistant_message_obj:
             info = assistant_message_obj.get("info", {})
             if isinstance(info, dict):
@@ -137,14 +132,23 @@ class Pipeline:
                         "unit": "TOKENS",
                     }
 
-        # Update generation
+        # Create the generation with the message_id as its ID
+        generation = trace.generation(
+            name=body["chat_id"],
+            model=body["model"],
+            input=body["messages"],
+            metadata={"interface": "open-webui"},
+            id=message_id,  # Set the generation ID to the message ID
+        )
+
+        # End the generation
         generation.end(
             output=assistant_message,
             metadata={"interface": "open-webui"},
             usage=usage,
         )
 
-        # Clean up the chat_generations dictionary
-        del self.chat_generations[body["chat_id"]]
+        # Clean up the chat_traces dictionary
+        del self.chat_traces[body["chat_id"]]
 
         return body
