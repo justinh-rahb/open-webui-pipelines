@@ -2,7 +2,7 @@
 title: Langfuse Filter Pipeline
 author: open-webui
 date: 2024-09-27
-version: 1.4
+version: 1.6
 license: MIT
 description: A filter pipeline that uses Langfuse.
 requirements: langfuse
@@ -43,7 +43,7 @@ class Pipeline:
             }
         )
         self.langfuse = None
-        self.chat_traces = {}  # Changed from chat_generations to chat_traces
+        self.chat_traces = {}  # Store traces using chat_id as key
 
     async def on_startup(self):
         print(f"on_startup:{__name__}")
@@ -91,7 +91,9 @@ class Pipeline:
             print(error_message)
             raise ValueError(error_message)
 
+        # Create the trace with id=chat_id
         trace = self.langfuse.trace(
+            id=body["chat_id"],
             name=f"filter:{__name__}",
             input=body,
             user_id=user["email"],
@@ -132,13 +134,13 @@ class Pipeline:
                         "unit": "TOKENS",
                     }
 
-        # Create the generation with the message_id as its ID
+        # Create the generation with id=message_id
         generation = trace.generation(
+            id=message_id,
             name=body["chat_id"],
             model=body["model"],
             input=body["messages"],
             metadata={"interface": "open-webui"},
-            id=message_id,  # Set the generation ID to the message ID
         )
 
         # End the generation
