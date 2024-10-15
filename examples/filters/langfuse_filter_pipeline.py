@@ -2,7 +2,7 @@
 title: Langfuse Filter Pipeline
 author: open-webui
 date: 2024-09-27
-version: 1.6
+version: 1.8
 license: MIT
 description: A filter pipeline that uses Langfuse.
 requirements: langfuse
@@ -18,6 +18,7 @@ from langfuse import Langfuse
 from langfuse.api.resources.commons.errors.unauthorized_error import UnauthorizedError
 
 def get_last_assistant_message_obj(messages: List[dict]) -> dict:
+    """Get the last assistant message object from the messages list."""
     for message in reversed(messages):
         if message["role"] == "assistant":
             return message
@@ -43,7 +44,7 @@ class Pipeline:
             }
         )
         self.langfuse = None
-        self.chat_traces = {}  # Store traces using chat_id as key
+        self.chat_traces = {}  # Store traces using chat_id as the key
 
     async def on_startup(self):
         print(f"on_startup:{__name__}")
@@ -79,7 +80,7 @@ class Pipeline:
 
         # Check for presence of required keys and generate chat_id if missing
         if "chat_id" not in body:
-            unique_id = f"SYSTEM MESSAGE {uuid.uuid4()}"
+            unique_id = f"SYSTEM_MESSAGE_{uuid.uuid4()}"
             body["chat_id"] = unique_id
             print(f"chat_id was missing, set to: {unique_id}")
 
@@ -94,15 +95,16 @@ class Pipeline:
         # Create the trace with id=chat_id
         trace = self.langfuse.trace(
             id=body["chat_id"],
-            name=f"filter:{__name__}",
+            name=f"Chat Trace {body['chat_id']}",
             input=body,
             user_id=user["email"],
             metadata={"user_name": user["name"], "user_id": user["id"]},
             session_id=body["chat_id"],
         )
 
-        # Store the trace for later use
+        # Store the trace for later use in the outlet
         self.chat_traces[body["chat_id"]] = trace
+        print(f"Trace created with ID: {body['chat_id']}")
         print(trace.get_trace_url())
 
         return body
@@ -110,44 +112,48 @@ class Pipeline:
     async def outlet(self, body: dict, user: Optional[dict] = None) -> dict:
         print(f"outlet:{__name__}")
         print(f"Received body: {body}")
+
         if body["chat_id"] not in self.chat_traces:
+            print(f"No trace found for chat_id: {body['chat_id']}")
             return body
 
         trace = self.chat_traces[body["chat_id"]]
 
-        # Extract the last assistant message object
         assistant_message_obj = get_last_assistant_message_obj(body["messages"])
-
-        # Get or generate a unique message ID
         message_id = assistant_message_obj.get("id")
+
+        # Ensure message_id exists
         if not message_id:
             message_id = str(uuid.uuid4())
             assistant_message_obj["id"] = message_id
+            print(f"message_id was missing, generated new ID: {message_id}")
 
         assistant_message = get_last_assistant_message(body["messages"])
 
         # Extract usage information for models that support it
-        #usage = None
-        #if assistant_message_obj:
-        #    info = assistant_message_obj.get("info", {})
-        #    if isinstance(info, dict):
-        #        input_tokens = info.get("prompt_eval_count") or info.get("prompt_tokens")
-        #        output_tokens = info.get("eval_count") or info.get("completion_tokens")
-        #        if input_tokens is not None and output_tokens is not None:
-        #            usage = {
-        #                "input": input_tokens,
-        #                "output": output_tokens,
-        #                "unit": "TOKENS",
-        #            }
+        usage = None
+        if assistant_message_obj:
+            info = assistant_message_obj.get("info", {})
+            if isinstance(info, dict):
+                input_tokens = info.get("prompt_eval_count") or info.get("prompt_tokens")
+                output_tokens = info.get("eval_count") or info.get("completion_tokens")
+                if input_tokens is not None and output_tokens is not None:
+                    usage = {
+                        "input": input_tokens,
+                        "output": output_tokens,
+                        "unit": "TOKENS",
+                    }
+                    print(f"Extracted usage info: {usage}")
 
-        # Create the generation with id=message_id
+        # Create the generation with run_id=message_id
         generation = trace.generation(
+            run_id=message_id,  # Set the generation ID to the message ID
             name=f"Message {message_id}",
             model=body["model"],
             input=body["messages"],
             metadata={"interface": "open-webui"},
-            run_id=message_id,  # Use run_id to set the generation ID
         )
+        print(f"Generation created with run_id (message_id): {message_id}")
 
         # End the generation
         generation.end(
@@ -155,8 +161,10 @@ class Pipeline:
             metadata={"interface": "open-webui"},
             usage=usage,
         )
+        print(f"Generation ended for message_id: {message_id}")
 
         # Clean up the chat_traces dictionary
         del self.chat_traces[body["chat_id"]]
+        print(f"Cleaned up trace for chat_id: {body['chat_id']}")
 
         return body
