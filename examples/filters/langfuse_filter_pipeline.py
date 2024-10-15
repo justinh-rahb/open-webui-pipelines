@@ -115,32 +115,38 @@ class Pipeline:
 
         trace = self.chat_traces[body["chat_id"]]
 
+        # Extract the last assistant message object
         assistant_message_obj = get_last_assistant_message_obj(body["messages"])
+
+        # Get or generate a unique message ID
         message_id = assistant_message_obj.get("id")
+        if not message_id:
+            message_id = str(uuid.uuid4())
+            assistant_message_obj["id"] = message_id
 
         assistant_message = get_last_assistant_message(body["messages"])
 
         # Extract usage information for models that support it
-        usage = None
-        if assistant_message_obj:
-            info = assistant_message_obj.get("info", {})
-            if isinstance(info, dict):
-                input_tokens = info.get("prompt_eval_count") or info.get("prompt_tokens")
-                output_tokens = info.get("eval_count") or info.get("completion_tokens")
-                if input_tokens is not None and output_tokens is not None:
-                    usage = {
-                        "input": input_tokens,
-                        "output": output_tokens,
-                        "unit": "TOKENS",
-                    }
+        #usage = None
+        #if assistant_message_obj:
+        #    info = assistant_message_obj.get("info", {})
+        #    if isinstance(info, dict):
+        #        input_tokens = info.get("prompt_eval_count") or info.get("prompt_tokens")
+        #        output_tokens = info.get("eval_count") or info.get("completion_tokens")
+        #        if input_tokens is not None and output_tokens is not None:
+        #            usage = {
+        #                "input": input_tokens,
+        #                "output": output_tokens,
+        #                "unit": "TOKENS",
+        #            }
 
         # Create the generation with id=message_id
         generation = trace.generation(
-            id=message_id,
-            name=body["chat_id"],
+            name=f"Message {message_id}",
             model=body["model"],
             input=body["messages"],
             metadata={"interface": "open-webui"},
+            run_id=message_id,  # Use run_id to set the generation ID
         )
 
         # End the generation
